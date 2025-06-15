@@ -10,7 +10,15 @@ const ICE_SERVERS = {
 export const WebRTC = (socket,roomId)=>{
   const [connections, setConnections] = useState(new Map())
   const [dataChannels, setDataChannels] = useState(new Map())
-
+  const [transferProgress, setTransferProgress] = useState(new Map())
+  const [isReceiving, setIsReceiving] = useState(false)
+  const [receivingFile, setReceivingFile] = useState(null)
+  const [receivedFiles, setReceivedFiles] = useState([]) // List of received files
+  
+  const receivedBuffers = useRef(new Map())
+  const receivedSize = useRef(new Map())
+  const fileMetadata = useRef(new Map()) // Store file metadata per user
+  const completedFiles = useRef(new Map()) // Store completed file blobs
 
   const createPeerConnection = useCallback((userId) => {
     const peerConnection = new RTCPeerConnection(ICE_SERVERS)
@@ -58,7 +66,7 @@ export const WebRTC = (socket,roomId)=>{
     channel.onmessage = (event) => {
       handleDataChannelMessage(event.data, userId)
     }
-    
+
     channel.onerror = (error) => {
       console.error('Data channel error:', error)
     }
@@ -285,4 +293,20 @@ export const WebRTC = (socket,roomId)=>{
     }
   }
 
+  return {
+    connections,
+    dataChannels,
+    transferProgress,
+    isReceiving,
+    receivingFile,
+    receivedFiles,
+    sendFile,
+    connectToPeer,
+    handleOffer,
+    handleAnswer,
+    handleIceCandidate,
+    downloadReceivedFile,
+    deleteReceivedFile,
+    clearAllReceivedFiles
+  }
 }

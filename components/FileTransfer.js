@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSocket } from '../hooks/useSocket'
+import { useWebRTC } from '../hooks/useWebRTC'
 
 const FileTransfer =() =>{
     const [roomId, setRoomId] = useState('')
@@ -7,6 +8,22 @@ const FileTransfer =() =>{
     const [connectedUsers, setConnectedUsers] = useState([])
 
     const { socket, isConnected } = useSocket()
+
+    const {
+    dataChannels,
+    transferProgress,
+    isReceiving,
+    receivingFile,
+    receivedFiles,
+    sendFile,
+    connectToPeer,
+    handleOffer,
+    handleAnswer,
+    handleIceCandidate,
+    downloadReceivedFile,
+    deleteReceivedFile,
+    clearAllReceivedFiles
+  } = useWebRTC(socket, roomId)
 
     const generateRoomId = () => {
         return Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -91,7 +108,7 @@ const FileTransfer =() =>{
                     </button>
                     </div>
                 </div>
-                
+
                 <div className="card">
                     <h3>Connected Users</h3>
                     {connectedUsers.length === 0 ? (
