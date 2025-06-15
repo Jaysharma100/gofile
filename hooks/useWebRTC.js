@@ -8,11 +8,11 @@ const ICE_SERVERS = {
 }
 
 export const WebRTC = (socket,roomId)=>{
-    const [connections, setConnections] = useState(new Map())
-    const [dataChannels, setDataChannels] = useState(new Map())
+  const [connections, setConnections] = useState(new Map())
+  const [dataChannels, setDataChannels] = useState(new Map())
 
 
-    const createPeerConnection = useCallback((userId) => {
+  const createPeerConnection = useCallback((userId) => {
     const peerConnection = new RTCPeerConnection(ICE_SERVERS)
     
     // Create data channel for file transfer
@@ -67,6 +67,56 @@ export const WebRTC = (socket,roomId)=>{
         return newMap
       })
     }
+  }
+
+
+
+  const sendFile = async (file, targetUserId) => {
+    const channel = dataChannels.get(targetUserId)
+    if (!channel || channel.readyState !== 'open') {
+      console.error('Data channel not ready')
+      return
+    }
+
+    // Send file metadata
+    const fileInfo = {
+      type: 'file-start',
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    }
+    channel.send(JSON.stringify(fileInfo))
+
+    // Send file in chunks
+    const chunkSize = 16384 // 16KB it is
+    const fileReader = new FileReader()
+    let offset = 0
+
+    const readSlice = () => {
+      const slice = file.slice(offset, offset + chunkSize)
+      fileReader.readAsArrayBuffer(slice)
+    }
+
+    fileReader.onload = (e) => {
+      channel.send(e.target.result)
+      offset += e.target.result.byteLength
+      
+      const progress = (offset / file.size) * 100
+      setTransferProgress(prev => new Map(prev.set(targetUserId, progress)))
+
+      if (offset < file.size) {
+        readSlice()
+      } else {
+        channel.send(JSON.stringify({ type: 'file-end' }))
+        setTransferProgress(prev => {
+          const newMap = new Map(prev)
+          newMap.delete(targetUserId)
+          return newMap
+        })
+      }
+    }
+
+    readSlice()
   }
 
 }
