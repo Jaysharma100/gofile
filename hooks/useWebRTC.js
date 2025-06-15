@@ -1,5 +1,8 @@
 import { useState, useRef, useCallback } from 'react'
 
+const MAX_BUFFERED_AMOUNT = 1024 * 1024 // 1MB
+const BUFFER_THRESHOLD = 512 * 1024 // 512KB
+
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -25,7 +28,8 @@ export const useWebRTC = (socket,roomId)=>{
     
     // Create data channel for file transfer
     const dataChannel = peerConnection.createDataChannel('fileTransfer', {
-      ordered: true
+      ordered: true,
+      maxRetransmits: 3
     })
     
     setupDataChannel(dataChannel, userId)
@@ -216,36 +220,94 @@ export const useWebRTC = (socket,roomId)=>{
     }
     channel.send(JSON.stringify(fileInfo))
 
-    // Send file in chunks
-    const chunkSize = 16384 // 16KB it is
-    const fileReader = new FileReader()
+    // Use smaller chunk size for large files
+    const chunkSize = 16384 // 16KB
     let offset = 0
+    let isTransferring = true
 
-    const readSlice = () => {
+    const sendNextChunk = () => {
+      if (!isTransferring || offset >= file.size) {
+        if (offset >= file.size) {
+          // Transfer complete
+          channel.send(JSON.stringify({ type: 'file-end' }))
+          setTransferProgress(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(targetUserId)
+            return newMap
+          })
+        }
+        return
+      }
+
+      // Check if buffer is getting full
+      if (channel.bufferedAmount > MAX_BUFFERED_AMOUNT) {
+        // Wait for buffer to drain
+        setTimeout(() => {
+          sendNextChunk()
+        }, 100) // Wait 100ms and try again
+        return
+      }
+
       const slice = file.slice(offset, offset + chunkSize)
-      fileReader.readAsArrayBuffer(slice)
-    }
-
-    fileReader.onload = (e) => {
-      channel.send(e.target.result)
-      offset += e.target.result.byteLength
+      const reader = new FileReader()
       
-      const progress = (offset / file.size) * 100
-      setTransferProgress(prev => new Map(prev.set(targetUserId, progress)))
-
-      if (offset < file.size) {
-        readSlice()
-      } else {
-        channel.send(JSON.stringify({ type: 'file-end' }))
+      reader.onload = (e) => {
+        if (!isTransferring) return
+        
+        try {
+          // Double-check buffer before sending
+          if (channel.bufferedAmount <= BUFFER_THRESHOLD) {
+            channel.send(e.target.result)
+            offset += e.target.result.byteLength
+            
+            // Update progress
+            const progress = (offset / file.size) * 100
+            setTransferProgress(prev => new Map(prev.set(targetUserId, progress)))
+            
+            // Schedule next chunk
+            if (offset < file.size) {
+              // Use requestAnimationFrame for better performance
+              requestAnimationFrame(sendNextChunk)
+            } else {
+              // Transfer complete
+              channel.send(JSON.stringify({ type: 'file-end' }))
+              setTransferProgress(prev => {
+                const newMap = new Map(prev)
+                newMap.delete(targetUserId)
+                return newMap
+              })
+            }
+          } else {
+            // Buffer still full, wait a bit more
+            setTimeout(sendNextChunk, 50)
+          }
+        } catch (error) {
+          console.error('Error sending chunk:', error)
+          isTransferring = false
+          // Clean up progress
+          setTransferProgress(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(targetUserId)
+            return newMap
+          })
+        }
+      }
+      
+      reader.onerror = (error) => {
+        console.error('FileReader error:', error)
+        isTransferring = false
         setTransferProgress(prev => {
           const newMap = new Map(prev)
           newMap.delete(targetUserId)
           return newMap
         })
       }
+      
+      reader.readAsArrayBuffer(slice)
     }
 
-    readSlice()
+    // Start sending
+    sendNextChunk()
   }
 
   const connectToPeer = async (userId) => {
