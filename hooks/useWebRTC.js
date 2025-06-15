@@ -7,7 +7,7 @@ const ICE_SERVERS = {
   ]
 }
 
-export const WebRTC = (socket,roomId)=>{
+export const useWebRTC = (socket,roomId)=>{
   const [connections, setConnections] = useState(new Map())
   const [dataChannels, setDataChannels] = useState(new Map())
   const [transferProgress, setTransferProgress] = useState(new Map())
