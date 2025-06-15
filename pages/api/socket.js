@@ -15,24 +15,33 @@ const SocketHandler = (req, res) => {
     res.socket.server.io = io
 
     const rooms = new Map()
+    const userNames = new Map()
 
     io.on('connection', (socket) => {
       console.log('New client connected:', socket.id)
 
-      socket.on('join-room', (roomId) => {
+      socket.on('join-room', (data) => {
+        const roomId = typeof data === 'string' ? data : data.roomId
+        const userName = typeof data === 'string' ? `User-${socket.id.slice(-4)}` : data.userName
+        
         socket.join(roomId)
+        userNames.set(socket.id, userName)
         
         if (!rooms.has(roomId)) {
           rooms.set(roomId, new Set())
         }
-        rooms.get(roomId).add(socket.id)
 
-        socket.to(roomId).emit('user-joined', socket.id)
+        const userObj = { id: socket.id, name: userName }
+        rooms.get(roomId).add(JSON.stringify(userObj))
+
+        socket.to(roomId).emit('user-joined', userObj)
 
         const usersInRoom = Array.from(rooms.get(roomId))
-        socket.emit('room-users', usersInRoom.filter(id => id !== socket.id))
-        
-        console.log(`User ${socket.id} joined room ${roomId}`)
+          .map(userStr => JSON.parse(userStr))
+          .filter(user => user.id !== socket.id)
+
+        socket.emit('room-users', usersInRoom)
+        console.log(`User ${userName} (${socket.id}) joined room ${roomId}`)
       })
 
       // WebRTC signaling
@@ -62,7 +71,8 @@ const SocketHandler = (req, res) => {
           fileName: data.fileName,
           fileSize: data.fileSize,
           fileType: data.fileType,
-          sender: socket.id
+          sender: socket.id,
+          senderName: userNames.get(socket.id)
         })
       })
 
@@ -77,9 +87,13 @@ const SocketHandler = (req, res) => {
       socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id)
         
+        const userName = userNames.get(socket.id)
+        userNames.delete(socket.id)
+
         rooms.forEach((users, roomId) => {
-          if (users.has(socket.id)) {
-            users.delete(socket.id)
+          const userObj = JSON.stringify({ id: socket.id, name: userName })
+          if (users.has(userObj)) {
+            users.delete(userObj)
             if (users.size === 0) {
               rooms.delete(roomId)
             } else {

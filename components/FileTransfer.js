@@ -4,6 +4,7 @@ import { useWebRTC } from '../hooks/useWebRTC'
 
 const FileTransfer =() =>{
     const [roomId, setRoomId] = useState('')
+    const [userName, setUserName] = useState('')
     const [isInRoom, setIsInRoom] = useState(false)
     const [connectedUsers, setConnectedUsers] = useState([])
     const [selectedFile, setSelectedFile] = useState(null)
@@ -12,20 +13,37 @@ const FileTransfer =() =>{
     const { socket, isConnected } = useSocket()
 
     const {
-    dataChannels,
-    transferProgress,
-    isReceiving,
-    receivingFile,
-    receivedFiles,
-    sendFile,
-    connectToPeer,
-    handleOffer,
-    handleAnswer,
-    handleIceCandidate,
-    downloadReceivedFile,
-    deleteReceivedFile,
-    clearAllReceivedFiles
-  } = useWebRTC(socket, roomId)
+        dataChannels,
+        transferProgress,
+        isReceiving,
+        receivingFile,
+        receivedFiles,
+        sendFile,
+        connectToPeer,
+        handleOffer,
+        handleAnswer,
+        handleIceCandidate,
+        downloadReceivedFile,
+        deleteReceivedFile,
+        clearAllReceivedFiles
+    } = useWebRTC(socket, roomId)
+
+    const generateGuestName = () => {
+        const randomString = Math.random().toString(36).substring(2, 8).toUpperCase()
+        return `Guest-${randomString}`
+    }
+    useEffect(() => {
+        if (!userName) {
+            setUserName(generateGuestName())
+        }
+    }, [userName])
+
+    // Find user name by ID
+    const getUserName = (userId) => {
+        const user = connectedUsers.find(u => u.id === userId)
+        return user ? user.name : `User ${userId.slice(-4)}`
+    }
+
 
     const generateRoomId = () => {
         return Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -33,8 +51,14 @@ const FileTransfer =() =>{
 
     const joinRoom = () => {
         if (socket && roomId.trim()) {
-        socket.emit('join-room', roomId.trim())
-        setIsInRoom(true)
+            const finalUserName = userName.trim() || generateGuestName()
+            setUserName(finalUserName)
+            
+            socket.emit('join-room', {
+                roomId: roomId.trim(),
+                userName: finalUserName
+            })
+            setIsInRoom(true)
         }
     }
 
@@ -64,11 +88,10 @@ const FileTransfer =() =>{
         setDragOver(false)
         const files = e.dataTransfer.files
         if (files.length > 0) {
-        handleFileSelect(files[0])
+            handleFileSelect(files[0])
         }
     }
 
-    // Send file to specific user
     const sendFileToUser = (userId) => {
         if (selectedFile && dataChannels.has(userId)) {
         sendFile(selectedFile, userId)
@@ -82,17 +105,17 @@ const FileTransfer =() =>{
         socket.on('room-users', (users) => {
         setConnectedUsers(users)
         // Connect to existing users
-        users.forEach(userId => {
-            connectToPeer(userId)
+        users.forEach(user => {
+            connectToPeer(user.id)
         })
         })
 
-        socket.on('user-joined', (userId) => {
-        setConnectedUsers(prev => [...prev, userId])
+        socket.on('user-joined', (user) => {
+        setConnectedUsers(prev => [...prev, user])
         })
 
-        socket.on('user-left', (userId) => {
-        setConnectedUsers(prev => prev.filter(id => id !== userId))
+        socket.on('user-left', (user) => {
+        setConnectedUsers(prev => prev.filter(id => id !== user))
         })
 
         socket.on('offer', ({ offer, sender }) => {
@@ -164,7 +187,7 @@ const FileTransfer =() =>{
     return (
         <div className="file-transfer-container">
         <div className="header">
-            <h1>P2P File Transfer</h1>
+            <h1>P2P GO-FILE</h1>
             <p>Share files directly between browsers using WebRTC</p>
         </div>
 
@@ -173,29 +196,37 @@ const FileTransfer =() =>{
             <h2>Join or Create Room</h2>
             <div className="room-form">
                 <input
-                type="text"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                placeholder="Enter Room ID"
-                className="room-input"
-                maxLength={6}
+                    type="text"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    placeholder={generateGuestName()}
+                    className="name-input"
+                    maxLength={20}
+                />
+                <input
+                    type="text"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                    placeholder="Enter Room ID"
+                    className="room-input"
+                    maxLength={6}
                 />
                 <button
-                onClick={() => setRoomId(generateRoomId())}
-                className="btn btn-secondary"
+                    onClick={() => setRoomId(generateRoomId())}
+                    className="btn btn-secondary"
                 >
                 Generate
                 </button>
                 <button
-                onClick={joinRoom}
-                disabled={!roomId.trim()}
-                className="btn btn-primary"
+                    onClick={joinRoom}
+                    disabled={!roomId.trim()}
+                    className="btn btn-primary"
                 >
                 Join Room
                 </button>
             </div>
             <p className="room-hint">
-                Share the Room ID with others to start transferring files
+                Enter your name and share the Room ID with others to start transferring files
             </p>
             </div>
         ) : (
@@ -204,6 +235,7 @@ const FileTransfer =() =>{
                     <div className="room-info">
                     <div className="room-details">
                         <h2>Room: {roomId}</h2>
+                        <p className="user-info">You are: <strong>{userName}</strong></p>
                         <p>
                         {connectedUsers.length} user{connectedUsers.length !== 1 ? 's' : ''} connected
                         </p>
@@ -261,35 +293,34 @@ const FileTransfer =() =>{
                 <div className="card">
                     <h3>Connected Users</h3>
                     {connectedUsers.length === 0 ? (
-                    <p className="no-users">No other users in the room</p>
+                        <p className="no-users">No other users in the room</p>
                     ) : (
-                    <div className="user-list">
-                        {connectedUsers.map((userId) => (
-                        <div key={userId} className="user-item">
-                            <div className="user-info">
-                            <div className="user-avatar">
-                                {userId.slice(-2).toUpperCase()}
-                            </div>
-                            <div className="user-details">
-                                <h4>User {userId.slice(-4)}</h4>
-                                <div className="user-status">
-                                {dataChannels.has(userId) ? '🟢 Connected' : '🟡 Connecting...'}
+                        <div className="user-list">
+                            {connectedUsers.map((user) => (
+                                <div key={user.id} className="user-item">
+                                    <div className="user-info">
+                                        <div className="user-avatar">
+                                            {user.name.slice(0, 2).toUpperCase()}
+                                        </div>
+                                        <div className="user-details">
+                                            <h4>{user.name}</h4>
+                                            <div className="user-status">
+                                                {dataChannels.has(user.id) ? '🟢 Connected' : '🟡 Connecting...'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => sendFileToUser(user.id)}
+                                        disabled={!selectedFile || !dataChannels.has(user.id)}
+                                        className="btn btn-success"
+                                    >
+                                        Send File
+                                    </button>
                                 </div>
-                            </div>
-                            </div>
-                            <button
-                            onClick={() => sendFileToUser(userId)}
-                            disabled={!selectedFile || !dataChannels.has(userId)}
-                            className="btn btn-success"
-                            >
-                            Send File
-                            </button>
+                            ))}
                         </div>
-                        ))}
-                    </div>
                     )}
                 </div>
-                {/* recive logic soon */}
                 {receivedFiles.length > 0 && (
                     <div className="card">
                     <div className="received-files-header">
@@ -311,7 +342,7 @@ const FileTransfer =() =>{
                             <div className="file-details">
                                 <div className="file-name">{file.name}</div>
                                 <div className="file-meta">
-                                {formatFileSize(file.size)} • From User {file.sender.slice(-4)} • {formatDate(file.receivedAt)}
+                                    {formatFileSize(file.size)} • From {getUserName(file.sender)} • {formatDate(file.receivedAt)}
                                 </div>
                                 {file.downloaded && (
                                 <div className="file-downloaded">✓ Downloaded</div>
@@ -361,7 +392,7 @@ const FileTransfer =() =>{
                         {Array.from(transferProgress.entries()).map(([userId, progress]) => (
                         <div key={userId} className="transfer-item sending">
                             <div className="transfer-header">
-                            <span className="transfer-name">Sending to User {userId.slice(-4)}</span>
+                            <span className="transfer-name">Sending to {getUserName(userId)}</span>
                             <span className="transfer-progress">{Math.round(progress)}%</span>
                             </div>
                             <div className="progress-bar">
