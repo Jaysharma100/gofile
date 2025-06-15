@@ -63,7 +63,7 @@ export const WebRTC = (socket,roomId)=>{
       console.log('Data channel closed with', userId)
       setDataChannels(prev => {
         const newMap = new Map(prev)
-        newMap.delete(userId)
+        newMap.delete(userId) 
         return newMap
       })
     }
@@ -117,6 +117,51 @@ export const WebRTC = (socket,roomId)=>{
     }
 
     readSlice()
+  }
+
+  const connectToPeer = async (userId) => {
+    const peerConnection = createPeerConnection(userId)
+    setConnections(prev => new Map(prev.set(userId, peerConnection)))
+    
+    const offer = await peerConnection.createOffer()
+    await peerConnection.setLocalDescription(offer)
+    
+    if (socket) {
+      socket.emit('offer', {
+        target: userId,
+        offer: offer
+      })
+    }
+  }
+
+  const handleOffer = async (offer, senderId) => {
+    const peerConnection = createPeerConnection(senderId)
+    setConnections(prev => new Map(prev.set(senderId, peerConnection)))
+    
+    await peerConnection.setRemoteDescription(offer)
+    const answer = await peerConnection.createAnswer()
+    await peerConnection.setLocalDescription(answer)
+    
+    if (socket) {
+      socket.emit('answer', {
+        target: senderId,
+        answer: answer
+      })
+    }
+  }
+
+  const handleAnswer = async (answer, senderId) => {
+    const peerConnection = connections.get(senderId)
+    if (peerConnection) {
+      await peerConnection.setRemoteDescription(answer)
+    }
+  }
+
+  const handleIceCandidate = async (candidate, senderId) => {
+    const peerConnection = connections.get(senderId)
+    if (peerConnection) {
+      await peerConnection.addIceCandidate(candidate)
+    }
   }
 
 }
