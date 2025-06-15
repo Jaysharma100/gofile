@@ -1,42 +1,258 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+.file-transfer-container {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 24px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.file-transfer-container > * + * {
+  margin-top: 24px;
 }
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+/* Header styles */
+.header {
+  margin-bottom: 32px;
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+.header h1 {
+  font-size: 1.875rem;
+  font-weight: bold;
+  color: #111827;
+  margin-bottom: 8px;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
+.header p {
+  color: #6b7280;
+}
+
+/* Loading screen */
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #e5e7eb;
+  border-bottom: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  color: #6b7280;
+}
+
+/* Card styles */
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  padding: 24px;
+}
+
+.card h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.card h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+/* Room join form */
+.room-form {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.room-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.room-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.room-hint {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn-primary {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.btn-secondary {
+  background-color: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #4b5563;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.btn-success {
+  background-color: #10b981;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #059669;
+}
+
+.btn:disabled {
+  background-color: #d1d5db;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 0.875rem;
+}
+
+.btn-download {
+  background-color: #3b82f6;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.btn-download:hover {
+  background-color: #2563eb;
+}
+
+.btn-download.downloaded {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.btn-download.downloaded:hover {
+  background-color: #bbf7d0;
+}
+
+/* Room info */
+.room-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.room-details h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.room-details p {
+  color: #6b7280;
   margin: 0;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* ok */
+
+.user-list {
+  margin-top: 12px;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+.user-list > * + * {
+  margin-top: 12px;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  background-color: #3b82f6;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.user-details h4 {
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.user-status {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.no-users {
+  color: #6b7280;
+}
+
+.app-container {
+  min-height: 100vh;
+  background-color: #f3f4f6;
+}
+* {
+  box-sizing: border-box;
 }
