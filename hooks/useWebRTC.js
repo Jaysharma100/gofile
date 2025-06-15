@@ -55,6 +55,10 @@ export const WebRTC = (socket,roomId)=>{
       setDataChannels(prev => new Map(prev.set(userId, channel)))
     }
     
+    channel.onmessage = (event) => {
+      handleDataChannelMessage(event.data, userId)
+    }
+    
     channel.onerror = (error) => {
       console.error('Data channel error:', error)
     }
@@ -67,6 +71,123 @@ export const WebRTC = (socket,roomId)=>{
         return newMap
       })
     }
+  }
+
+  const handleDataChannelMessage = (data, userId) => {
+    if (typeof data === 'string') {
+      const message = JSON.parse(data)
+      
+      if (message.type === 'file-start') {
+        const fileInfo = {
+          name: message.fileName,
+          size: message.fileSize,
+          type: message.fileType
+        }
+        
+        // Store file metadata for this user
+        fileMetadata.current.set(userId, fileInfo)
+        
+        setIsReceiving(true)
+        setReceivingFile(fileInfo)
+        receivedBuffers.current.set(userId, [])
+        receivedSize.current.set(userId, 0)
+        setTransferProgress(prev => new Map(prev.set(userId, 0)))
+      } else if (message.type === 'file-end') {
+        const buffers = receivedBuffers.current.get(userId)
+        const metadata = fileMetadata.current.get(userId)
+        
+        if (buffers && metadata) {
+          const blob = new Blob(buffers, { type: metadata.type })
+          const fileId = `${userId}-${Date.now()}`
+          
+          // Store the completed file
+          completedFiles.current.set(fileId, blob)
+          
+          // Add to received files list
+          const receivedFile = {
+            id: fileId,
+            name: metadata.name,
+            size: metadata.size,
+            type: metadata.type,
+            sender: userId,
+            receivedAt: new Date(),
+            downloaded: false
+          }
+          
+          setReceivedFiles(prev => [receivedFile, ...prev])
+          
+          // Cleanup transfer data
+          receivedBuffers.current.delete(userId)
+          receivedSize.current.delete(userId)
+          fileMetadata.current.delete(userId)
+          setTransferProgress(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(userId)
+            return newMap
+          })
+          setIsReceiving(false)
+          setReceivingFile(null)
+        }
+      }
+    } else {
+      // Binary data (file chunk)
+      const metadata = fileMetadata.current.get(userId)
+      
+      if (metadata) {
+        const buffers = receivedBuffers.current.get(userId) || []
+        buffers.push(data)
+        receivedBuffers.current.set(userId, buffers)
+        
+        const currentSize = receivedSize.current.get(userId) || 0
+        const newSize = currentSize + data.byteLength
+        receivedSize.current.set(userId, newSize)
+        
+        const progress = (newSize / metadata.size) * 100
+        setTransferProgress(prev => new Map(prev.set(userId, progress)))
+      }
+    }
+  }
+
+  const downloadFile = (blob, fileName) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const downloadReceivedFile = (fileId) => {
+    const blob = completedFiles.current.get(fileId)
+    const fileInfo = receivedFiles.find(f => f.id === fileId)
+    
+    if (blob && fileInfo) {
+      downloadFile(blob, fileInfo.name)
+      
+      // Mark as downloaded
+      setReceivedFiles(prev => 
+        prev.map(file => 
+          file.id === fileId ? { ...file, downloaded: true } : file
+        )
+      )
+    }
+  }
+
+  const deleteReceivedFile = (fileId) => {
+    // Remove from completed files    
+    // Remove from received files list
+    completedFiles.current.delete(fileId)
+    setReceivedFiles(prev => prev.filter(file => file.id !== fileId))
+  }
+
+  const clearAllReceivedFiles = () => {
+    // Clear all completed files
+    completedFiles.current.clear()
+    
+    // Clear received files list
+    setReceivedFiles([])
   }
 
 
