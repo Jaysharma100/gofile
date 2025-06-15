@@ -75,7 +75,54 @@ const FileTransfer =() =>{
             </div>
         ) : (
             <div className="filetransfersection">
-                file transfer will happen here.
+                <div className="card">
+                    <div className="room-info">
+                    <div className="room-details">
+                        <h2>Room: {roomId}</h2>
+                        <p>
+                        {connectedUsers.length} user{connectedUsers.length !== 1 ? 's' : ''} connected
+                        </p>
+                    </div>
+                    <button
+                        onClick={leaveRoom}
+                        className="btn btn-danger"
+                    >
+                        Leave Room
+                    </button>
+                    </div>
+                </div>
+                
+                <div className="card">
+                    <h3>Connected Users</h3>
+                    {connectedUsers.length === 0 ? (
+                    <p className="no-users">No other users in the room</p>
+                    ) : (
+                    <div className="user-list">
+                        {connectedUsers.map((userId) => (
+                        <div key={userId} className="user-item">
+                            <div className="user-info">
+                            <div className="user-avatar">
+                                {userId.slice(-2).toUpperCase()}
+                            </div>
+                            <div className="user-details">
+                                <h4>User {userId.slice(-4)}</h4>
+                                <div className="user-status">
+                                {dataChannels.has(userId) ? '🟢 Connected' : '🟡 Connecting...'}
+                                </div>
+                            </div>
+                            </div>
+                            <button
+                            onClick={() => sendFileToUser(userId)}
+                            disabled={!selectedFile || !dataChannels.has(userId)}
+                            className="btn btn-success"
+                            >
+                            Send File
+                            </button>
+                        </div>
+                        ))}
+                    </div>
+                    )}
+                </div>
             </div>
             )}
         </div>
