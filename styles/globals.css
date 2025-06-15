@@ -297,6 +297,212 @@
   color: #6b7280;
 }
 
+.received-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.received-files-list {
+  max-height: 256px;
+  overflow-y: auto;
+}
+
+.received-files-list > * + * {
+  margin-top: 12px;
+}
+
+.received-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.25rem;
+}
+
+.file-icon.image {
+  background-color: #dcfce7;
+}
+
+.file-icon.video {
+  background-color: #dbeafe;
+}
+
+.file-icon.audio {
+  background-color: #f3e8ff;
+}
+
+.file-icon.pdf {
+  background-color: #fef2f2;
+}
+
+.file-icon.default {
+  background-color: #f3f4f6;
+}
+
+.file-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.file-downloaded {
+  font-size: 0.75rem;
+  color: #059669;
+  font-weight: 500;
+}
+
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: color 0.2s;
+  font-size: 1rem;
+}
+
+.delete-btn:hover {
+  color: #dc2626;
+}
+
+/* Transfer progress */
+.transfer-list > * + * {
+  margin-top: 12px;
+}
+
+.transfer-item {
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.transfer-item.receiving {
+  background-color: #eff6ff;
+}
+
+.transfer-item.sending {
+  background-color: #f0fdf4;
+}
+
+.transfer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.transfer-name {
+  font-weight: 500;
+}
+
+.transfer-progress {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-fill.receiving {
+  background-color: #3b82f6;
+}
+
+.progress-fill.sending {
+  background-color: #10b981;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .file-transfer-container {
+    padding: 16px;
+  }
+  
+  .room-form {
+    flex-direction: column;
+  }
+  
+  .room-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .user-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .received-file-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .file-info {
+    width: 100%;
+  }
+  
+  .file-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 .app-container {
   min-height: 100vh;
   background-color: #f3f4f6;
