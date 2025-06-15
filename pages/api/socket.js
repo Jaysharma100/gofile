@@ -35,6 +35,43 @@ const SocketHandler = (req, res) => {
         console.log(`User ${socket.id} joined room ${roomId}`)
       })
 
+      // WebRTC signaling
+      socket.on('offer', (data) => {
+        socket.to(data.target).emit('offer', {
+          offer: data.offer,
+          sender: socket.id
+        })
+      })
+
+      socket.on('answer', (data) => {
+        socket.to(data.target).emit('answer', {
+          answer: data.answer,
+          sender: socket.id
+        })
+      })
+
+      socket.on('ice-candidate', (data) => {
+        socket.to(data.target).emit('ice-candidate', {
+          candidate: data.candidate,
+          sender: socket.id
+        })
+      })
+
+      socket.on('file-offer', (data) => {
+        socket.to(data.target).emit('file-offer', {
+          fileName: data.fileName,
+          fileSize: data.fileSize,
+          fileType: data.fileType,
+          sender: socket.id
+        })
+      })
+
+      socket.on('file-answer', (data) => {
+        socket.to(data.target).emit('file-answer', {
+          accepted: data.accepted,
+          sender: socket.id
+        })
+      })
       
 
       socket.on('disconnect', () => {
