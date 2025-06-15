@@ -197,7 +197,55 @@
   margin: 0;
 }
 
-/* ok */
+.file-drop-zone {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.file-drop-zone.drag-over {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.file-drop-zone .selected-file {
+  margin-bottom: 16px;
+}
+
+.file-drop-zone .selected-file h4 {
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.file-drop-zone .selected-file p {
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.file-drop-zone .file-hint {
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.file-input {
+  display: none;
+}
+
+.remove-file-btn {
+  color: #ef4444;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.remove-file-btn:hover {
+  color: #dc2626;
+}
 
 .user-list {
   margin-top: 12px;
