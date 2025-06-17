@@ -4,6 +4,21 @@ import { useWebRTC } from '../hooks/useWebRTC'
 import pic from '../public/image.png'
 import Image from 'next/image'
 
+import {
+    WhatsappShareButton,
+    TelegramShareButton,
+    EmailShareButton,
+    TwitterShareButton,
+    FacebookShareButton,
+    LinkedinShareButton,
+    WhatsappIcon,
+    TelegramIcon,
+    EmailIcon,
+    TwitterIcon,
+    FacebookIcon,
+    LinkedinIcon
+} from 'react-share'
+
 const FileTransfer =() =>{
     const [roomId, setRoomId] = useState('')
     const [userName, setUserName] = useState('')
@@ -209,6 +224,9 @@ const FileTransfer =() =>{
         if (type.includes('pdf')) return 'pdf'
         return 'default'
     }
+
+    const shareTitle = `Join my file transfer room (${roomId})`
+    const shareDescription = `Click this link to join my secure file transfer room and share files instantly! Room ID: ${roomId}`
 
     if (!isConnected) {
         return (
@@ -479,6 +497,66 @@ const FileTransfer =() =>{
                                 >
                                     {linkCopied ? '✓ Copied!' : '📋 Copy'}
                                 </button>
+                            </div>
+                            <div className="social-share-section">
+                                <h4>Share via:</h4>
+                                <div className="social-share-buttons">
+                                    <WhatsappShareButton
+                                        url={shareLink}
+                                        title={shareDescription}
+                                        className="social-share-button"
+                                    >
+                                        <WhatsappIcon size={40} round />
+                                        <span>WhatsApp</span>
+                                    </WhatsappShareButton>
+
+                                    <TelegramShareButton
+                                        url={shareLink}
+                                        title={shareDescription}
+                                        className="social-share-button"
+                                    >
+                                        <TelegramIcon size={40} round />
+                                        <span>Telegram</span>
+                                    </TelegramShareButton>
+
+                                    <EmailShareButton
+                                        url={shareLink}
+                                        subject={shareTitle}
+                                        body={shareDescription}
+                                        className="social-share-button"
+                                    >
+                                        <EmailIcon size={40} round />
+                                        <span>Email</span>
+                                    </EmailShareButton>
+
+                                    <TwitterShareButton
+                                        url={shareLink}
+                                        title={shareDescription}
+                                        className="social-share-button"
+                                    >
+                                        <TwitterIcon size={40} round />
+                                        <span>Twitter</span>
+                                    </TwitterShareButton>
+
+                                    <FacebookShareButton
+                                        url={shareLink}
+                                        quote={shareDescription}
+                                        className="social-share-button"
+                                    >
+                                        <FacebookIcon size={40} round />
+                                        <span>Facebook</span>
+                                    </FacebookShareButton>
+
+                                    <LinkedinShareButton
+                                        url={shareLink}
+                                        title={shareTitle}
+                                        summary={shareDescription}
+                                        className="social-share-button"
+                                    >
+                                        <LinkedinIcon size={40} round />
+                                        <span>LinkedIn</span>
+                                    </LinkedinShareButton>
+                                </div>
                             </div>
                             <p className="share-hint">
                                 When someone clicks this link, they will be taken to your room and can join instantly!
