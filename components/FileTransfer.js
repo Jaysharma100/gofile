@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSocket } from '../hooks/useSocket'
 import { useWebRTC } from '../hooks/useWebRTC'
+import pic from '../public/image.png'
+import Image from 'next/image'
 
 const FileTransfer =() =>{
     const [roomId, setRoomId] = useState('')
@@ -8,6 +10,9 @@ const FileTransfer =() =>{
     const [isInRoom, setIsInRoom] = useState(false)
     const [connectedUsers, setConnectedUsers] = useState([])
     const [selectedFile, setSelectedFile] = useState(null)
+    const [showShareModal, setShowShareModal] = useState(false)
+    const [shareLink, setShareLink] = useState('')
+    const [linkCopied, setLinkCopied] = useState(false)
     const [dragOver, setDragOver] = useState(false)
     const fileInputRef = useRef(null)
     const { socket, isConnected } = useSocket()
@@ -66,6 +71,38 @@ const FileTransfer =() =>{
         setIsInRoom(false)
         setConnectedUsers([])
         setRoomId('')
+    }
+
+    const generateShareLink = () => {
+        const baseUrl = window.location.origin
+        const shareUrl = `${baseUrl}/?room=${roomId}`
+        setShareLink(shareUrl)
+        setShowShareModal(true)
+        setLinkCopied(false)
+    }
+
+    const copyShareLink = async () => {
+        try {
+            await navigator.clipboard.writeText(shareLink)
+            setLinkCopied(true)
+            setTimeout(() => setLinkCopied(false), 2000) // Reset after 2 seconds
+        } catch (err) {
+            console.error('Failed to copy link:', err)
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea')
+            textArea.value = shareLink
+            document.body.appendChild(textArea)
+            textArea.select()
+            document.execCommand('copy')
+            document.body.removeChild(textArea)
+            setLinkCopied(true)
+            setTimeout(() => setLinkCopied(false), 2000)
+        }
+    }
+
+    const closeShareModal = () => {
+        setShowShareModal(false)
+        setLinkCopied(false)
     }
 
     const handleFileSelect = (file) => {
@@ -187,7 +224,7 @@ const FileTransfer =() =>{
     return (
         <div className="file-transfer-container">
         <div className="header">
-            <h1>P2P GO-FILE</h1>
+            <Image src={pic} alt="GoFile" className='logo' />
             <p>Share files directly between browsers using WebRTC</p>
         </div>
 
@@ -233,19 +270,28 @@ const FileTransfer =() =>{
             <div className="file-transfer-container">
                 <div className="card">
                     <div className="room-info">
-                    <div className="room-details">
-                        <h2>Room: {roomId}</h2>
-                        <p className="user-info">You are: <strong>{userName}</strong></p>
-                        <p>
-                        {connectedUsers.length} user{connectedUsers.length !== 1 ? 's' : ''} connected
-                        </p>
-                    </div>
-                    <button
-                        onClick={leaveRoom}
-                        className="btn btn-danger"
-                    >
-                        Leave Room
-                    </button>
+                        <div className="room-details">
+                            <h2>Room: {roomId}</h2>
+                            <p className="user-info">You are: <strong>{userName}</strong></p>
+                            <p>
+                            {connectedUsers.length} user{connectedUsers.length !== 1 ? 's' : ''} connected
+                            </p>
+                        </div>
+                        <div className="room-actions">
+                            <button
+                                onClick={generateShareLink}
+                                className="btn btn-share"
+                                title="Share room link"
+                            >
+                                🔗 Share Room
+                            </button>
+                            <button
+                                onClick={leaveRoom}
+                                className="btn btn-danger"
+                            >
+                                Leave Room
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -407,6 +453,39 @@ const FileTransfer =() =>{
                     </div>
                 )}
             </div>
+            )}
+
+            {showShareModal && (
+                <div className="modal-overlay" onClick={closeShareModal}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Share Room Link</h3>
+                            <button className="modal-close" onClick={closeShareModal}>
+                                ✕
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <p>Share this link with others to invite them to your room:</p>
+                            <div className="share-link-container">
+                                <input
+                                    type="text"
+                                    value={shareLink}
+                                    readOnly
+                                    className="share-link-input"
+                                />
+                                <button
+                                    onClick={copyShareLink}
+                                    className={`btn ${linkCopied ? 'btn-success' : 'btn-primary'}`}
+                                >
+                                    {linkCopied ? '✓ Copied!' : '📋 Copy'}
+                                </button>
+                            </div>
+                            <p className="share-hint">
+                                When someone clicks this link, they will be taken to your room and can join instantly!
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     )
