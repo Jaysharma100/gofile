@@ -7,19 +7,19 @@ export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(false)
 
   useEffect(() => {
-    const socketInitializer = async () => {
-      await fetch('/api/socket')
-      socket = io({
-        path: '/api/socket',
+    const socketInitializer = () => {
+      socket = io('http://localhost:3001', {
+        path: '/socket.io',
+        transports: ['websocket'], // optional, but helps force WebSocket
       })
 
       socket.on('connect', () => {
-        console.log('Connected to server')
+        console.log('✅ Connected to server')
         setIsConnected(true)
       })
 
       socket.on('disconnect', () => {
-        console.log('Disconnected from server')
+        console.log('❌ Disconnected from server')
         setIsConnected(false)
       })
     }
