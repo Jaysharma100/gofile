@@ -8,7 +8,7 @@ export const useSocket = () => {
 
   useEffect(() => {
     const socketInitializer = () => {
-      socket = io('http://localhost:3001', {
+      socket = io('https://gofile-x1mf.onrender.com', {
         path: '/socket.io',
         transports: ['websocket'], // optional, but helps force WebSocket
       })
