@@ -629,6 +629,33 @@ const FileTransfer =() =>{
                     </div>
                 </div>
             )}
+
+        <div className="footer">
+            <div className="footer-content">
+                <div className="footer-text">
+                <span>Made by</span>
+                <strong>Jay Sharma</strong>
+                </div>
+                <div className="footer-links">
+                <a 
+                    href="https://github.com/jaysharma100/gofile" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="footer-link github"
+                >
+                    GitHub
+                </a>
+                <a 
+                    href="https://www.linkedin.com/in/jaysharma100/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="footer-link linkedin"
+                >
+                    LinkedIn
+                </a>
+                </div>
+            </div>
+            </div>
         </div>
     )
 }
