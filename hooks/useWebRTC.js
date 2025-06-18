@@ -13,15 +13,16 @@ const ICE_SERVERS = {
 export const useWebRTC = (socket,roomId)=>{
   const [connections, setConnections] = useState(new Map())
   const [dataChannels, setDataChannels] = useState(new Map())
-  const [transferProgress, setTransferProgress] = useState(new Map())
-  const [isReceiving, setIsReceiving] = useState(false)
-  const [receivingFile, setReceivingFile] = useState(null)
+  const [activeTransfers, setActiveTransfers] = useState(new Map())
   const [receivedFiles, setReceivedFiles] = useState([]) // List of received files
   
   const receivedBuffers = useRef(new Map())
   const receivedSize = useRef(new Map())
   const fileMetadata = useRef(new Map()) // Store file metadata per user
   const completedFiles = useRef(new Map()) // Store completed file blobs
+  const activeTransferControllers = useRef(new Map())
+  // Add this to track which transfer is currently being sent to each user
+  const currentSendingTransfer = useRef(new Map()) // userId -> transferId
 
   const createPeerConnection = useCallback((userId) => {
     const peerConnection = new RTCPeerConnection(ICE_SERVERS)
@@ -59,6 +60,10 @@ export const useWebRTC = (socket,roomId)=>{
     return peerConnection
   }, [socket])
 
+  const generateTransferId = () => {
+    return `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+
   const setupDataChannel = (channel, userId) => {
     channel.binaryType = 'arraybuffer'
     
@@ -90,23 +95,39 @@ export const useWebRTC = (socket,roomId)=>{
       const message = JSON.parse(data)
       
       if (message.type === 'file-start') {
+        const transferId = message.transferId;
         const fileInfo = {
           name: message.fileName,
           size: message.fileSize,
-          type: message.fileType
+          type: message.fileType,
+          transferId: transferId,
+          sender: userId
         }
         
         // Store file metadata for this user
-        fileMetadata.current.set(userId, fileInfo)
+        fileMetadata.current.set(transferId, fileInfo)
         
-        setIsReceiving(true)
-        setReceivingFile(fileInfo)
-        receivedBuffers.current.set(userId, [])
-        receivedSize.current.set(userId, 0)
-        setTransferProgress(prev => new Map(prev.set(userId, 0)))
-      } else if (message.type === 'file-end') {
-        const buffers = receivedBuffers.current.get(userId)
-        const metadata = fileMetadata.current.get(userId)
+        setActiveTransfers(prev => new Map(prev.set(transferId, {
+          id: transferId,
+          type: 'receiving',
+          fileName: message.fileName,
+          fileSize: message.fileSize,
+          progress: 0,
+          userId: userId,
+          status: 'active'
+        })))
+        
+        receivedBuffers.current.set(transferId, [])
+        receivedSize.current.set(transferId, 0)
+
+      }else if (message.type === 'file-chunk-header') {
+        // This message tells us which transfer the next binary chunk belongs to
+        currentSendingTransfer.current.set(userId, message.transferId)
+        
+      }else if (message.type === 'file-end') {
+        const transferId = message.transferId
+        const buffers = receivedBuffers.current.get(transferId)
+        const metadata = fileMetadata.current.get(transferId)
         
         if (buffers && metadata) {
           const blob = new Blob(buffers, { type: metadata.type })
@@ -129,34 +150,134 @@ export const useWebRTC = (socket,roomId)=>{
           setReceivedFiles(prev => [receivedFile, ...prev])
           
           // Cleanup transfer data
-          receivedBuffers.current.delete(userId)
-          receivedSize.current.delete(userId)
-          fileMetadata.current.delete(userId)
-          setTransferProgress(prev => {
+          receivedBuffers.current.delete(transferId)
+          receivedSize.current.delete(transferId)
+          fileMetadata.current.delete(transferId)
+          currentSendingTransfer.current.delete(userId)
+          
+          // Remove from active transfers
+          setActiveTransfers(prev => {
             const newMap = new Map(prev)
-            newMap.delete(userId)
+            newMap.delete(transferId)
             return newMap
           })
-          setIsReceiving(false)
-          setReceivingFile(null)
         }
+      } else if (message.type === 'file-cancel') {
+        const transferId = message.transferId
+        
+        // Cleanup receiving transfer
+        receivedBuffers.current.delete(transferId)
+        receivedSize.current.delete(transferId)
+        fileMetadata.current.delete(transferId)
+        
+        // Update active transfers
+        setActiveTransfers(prev => {
+          const newMap = new Map(prev)
+          const transfer = newMap.get(transferId)
+          if (transfer) {
+            newMap.set(transferId, { ...transfer, status: 'cancelled' })
+            // Remove after a short delay to show cancelled status
+            setTimeout(() => {
+              setActiveTransfers(current => {
+                const updated = new Map(current)
+                updated.delete(transferId)
+                return updated
+              })
+            }, 2000)
+          }
+          return newMap
+        })
+        
+      } else if (message.type === 'progress-update') {
+        const transferId = message.transferId
+        const progress = message.progress
+        
+        // Update sending progress
+        setActiveTransfers(prev => {
+          const newMap = new Map(prev)
+          const transfer = newMap.get(transferId)
+          if (transfer && transfer.type === 'sending') {
+            newMap.set(transferId, { ...transfer, progress })
+          }
+          return newMap
+        })
       }
     } else {
       // Binary data (file chunk)
-      const metadata = fileMetadata.current.get(userId)
+      // Get the correct transfer ID from the header message
+      const transferId = currentSendingTransfer.current.get(userId)
       
-      if (metadata) {
-        const buffers = receivedBuffers.current.get(userId) || []
-        buffers.push(data)
-        receivedBuffers.current.set(userId, buffers)
+      if (transferId) {
+        const metadata = fileMetadata.current.get(transferId)
         
-        const currentSize = receivedSize.current.get(userId) || 0
-        const newSize = currentSize + data.byteLength
-        receivedSize.current.set(userId, newSize)
-        
-        const progress = (newSize / metadata.size) * 100
-        setTransferProgress(prev => new Map(prev.set(userId, progress)))
+        if (metadata) {
+          const buffers = receivedBuffers.current.get(transferId) || []
+          buffers.push(data)
+          receivedBuffers.current.set(transferId, buffers)
+          
+          const currentSize = receivedSize.current.get(transferId) || 0
+          const newSize = currentSize + data.byteLength
+          receivedSize.current.set(transferId, newSize)
+          
+          const progress = (newSize / metadata.size) * 100
+          
+          // Update progress for the specific transfer
+          setActiveTransfers(prev => {
+            const newMap = new Map(prev)
+            const transfer = newMap.get(transferId)
+            if (transfer) {
+              newMap.set(transferId, { ...transfer, progress })
+            }
+            return newMap
+          })
+        }
       }
+    }
+  }
+
+  const cancelTransfer = (transferId) => {
+    const transfer = activeTransfers.get(transferId)
+    if (!transfer) return
+    
+    // Cancel the transfer controller if it's a sending transfer
+    const controller = activeTransferControllers.current.get(transferId)
+    if (controller) {
+      controller.cancelled = true
+      activeTransferControllers.current.delete(transferId)
+    }
+    
+    // Send cancel message to peer
+    const channel = dataChannels.get(transfer.userId)
+    if (channel && channel.readyState === 'open') {
+      channel.send(JSON.stringify({
+        type: 'file-cancel',
+        transferId: transferId
+      }))
+    }
+    
+    // Update local state
+    setActiveTransfers(prev => {
+      const newMap = new Map(prev)
+      const currentTransfer = newMap.get(transferId)
+      if (currentTransfer) {
+        newMap.set(transferId, { ...currentTransfer, status: 'cancelled' })
+        // Remove after showing cancelled status
+        setTimeout(() => {
+          setActiveTransfers(current => {
+            const updated = new Map(current)
+            updated.delete(transferId)
+            return updated
+          })
+        }, 2000)
+      }
+      return newMap
+    })
+    
+    // Cleanup if receiving
+    if (transfer.type === 'receiving') {
+      receivedBuffers.current.delete(transferId)
+      receivedSize.current.delete(transferId)
+      fileMetadata.current.delete(transferId)
     }
   }
 
@@ -188,22 +309,14 @@ export const useWebRTC = (socket,roomId)=>{
   }
 
   const deleteReceivedFile = (fileId) => {
-    // Remove from completed files    
-    // Remove from received files list
     completedFiles.current.delete(fileId)
     setReceivedFiles(prev => prev.filter(file => file.id !== fileId))
   }
 
   const clearAllReceivedFiles = () => {
-    // Clear all completed files
     completedFiles.current.clear()
-    
-    // Clear received files list
     setReceivedFiles([])
   }
-
-
-
   const sendFile = async (file, targetUserId) => {
     const channel = dataChannels.get(targetUserId)
     if (!channel || channel.readyState !== 'open') {
@@ -211,40 +324,70 @@ export const useWebRTC = (socket,roomId)=>{
       return
     }
 
+    const transferId = generateTransferId()
+    
+    // Add to active transfers
+    setActiveTransfers(prev => new Map(prev.set(transferId, {
+      id: transferId,
+      type: 'sending',
+      fileName: file.name,
+      fileSize: file.size,
+      progress: 0,
+      userId: targetUserId,
+      status: 'active'
+    })))
+
+    // Create transfer controller
+    const controller = { cancelled: false }
+    activeTransferControllers.current.set(transferId, controller)
+
     // Send file metadata
     const fileInfo = {
       type: 'file-start',
       fileName: file.name,
       fileSize: file.size,
-      fileType: file.type
+      fileType: file.type,
+      transferId: transferId
     }
     channel.send(JSON.stringify(fileInfo))
 
-    // Use smaller chunk size for large files
     const chunkSize = 16384 // 16KB
     let offset = 0
-    let isTransferring = true
 
     const sendNextChunk = () => {
-      if (!isTransferring || offset >= file.size) {
+      if (controller.cancelled || offset >= file.size) {
+        if (controller.cancelled) {
+          // Transfer was cancelled
+          activeTransferControllers.current.delete(transferId)
+          return
+        }
+        
         if (offset >= file.size) {
           // Transfer complete
-          channel.send(JSON.stringify({ type: 'file-end' }))
-          setTransferProgress(prev => {
+          channel.send(JSON.stringify({ 
+            type: 'file-end',
+            transferId: transferId 
+          }))
+          
+          // Remove from active transfers
+          setActiveTransfers(prev => {
             const newMap = new Map(prev)
-            newMap.delete(targetUserId)
+            newMap.delete(transferId)
             return newMap
           })
+          
+          activeTransferControllers.current.delete(transferId)
         }
         return
       }
 
       // Check if buffer is getting full
       if (channel.bufferedAmount > MAX_BUFFERED_AMOUNT) {
-        // Wait for buffer to drain
         setTimeout(() => {
-          sendNextChunk()
-        }, 100) // Wait 100ms and try again
+          if (!controller.cancelled) {
+            sendNextChunk()
+          }
+        }, 100)
         return
       }
 
@@ -252,42 +395,69 @@ export const useWebRTC = (socket,roomId)=>{
       const reader = new FileReader()
       
       reader.onload = (e) => {
-        if (!isTransferring) return
+        if (controller.cancelled) return
         
         try {
-          // Double-check buffer before sending
           if (channel.bufferedAmount <= BUFFER_THRESHOLD) {
+            // Send header before binary data to identify which transfer this chunk belongs to
+            channel.send(JSON.stringify({
+              type: 'file-chunk-header',
+              transferId: transferId
+            }))
+            
+            // Send the actual binary chunk
             channel.send(e.target.result)
             offset += e.target.result.byteLength
             
             // Update progress
             const progress = (offset / file.size) * 100
-            setTransferProgress(prev => new Map(prev.set(targetUserId, progress)))
+            setActiveTransfers(prev => {
+              const newMap = new Map(prev)
+              const transfer = newMap.get(transferId)
+              if (transfer) {
+                newMap.set(transferId, { ...transfer, progress })
+              }
+              return newMap
+            })
             
-            // Schedule next chunk
-            if (offset < file.size) {
-              // Use requestAnimationFrame for better performance
+            // Send progress update to receiver
+            channel.send(JSON.stringify({
+              type: 'progress-update',
+              transferId: transferId,
+              progress: progress
+            }))
+            
+            if (offset < file.size && !controller.cancelled) {
               requestAnimationFrame(sendNextChunk)
-            } else {
+            } else if (offset >= file.size) {
               // Transfer complete
-              channel.send(JSON.stringify({ type: 'file-end' }))
-              setTransferProgress(prev => {
+              channel.send(JSON.stringify({ 
+                type: 'file-end',
+                transferId: transferId 
+              }))
+              
+              setActiveTransfers(prev => {
                 const newMap = new Map(prev)
-                newMap.delete(targetUserId)
+                newMap.delete(transferId)
                 return newMap
               })
+              
+              activeTransferControllers.current.delete(transferId)
             }
           } else {
-            // Buffer still full, wait a bit more
-            setTimeout(sendNextChunk, 50)
+            setTimeout(() => {
+              if (!controller.cancelled) {
+                sendNextChunk()
+              }
+            }, 50)
           }
         } catch (error) {
           console.error('Error sending chunk:', error)
-          isTransferring = false
-          // Clean up progress
-          setTransferProgress(prev => {
+          controller.cancelled = true
+          activeTransferControllers.current.delete(transferId)
+          setActiveTransfers(prev => {
             const newMap = new Map(prev)
-            newMap.delete(targetUserId)
+            newMap.delete(transferId)
             return newMap
           })
         }
@@ -295,18 +465,17 @@ export const useWebRTC = (socket,roomId)=>{
       
       reader.onerror = (error) => {
         console.error('FileReader error:', error)
-        isTransferring = false
-        setTransferProgress(prev => {
+        controller.cancelled = true
+        activeTransferControllers.current.delete(transferId)
+        setActiveTransfers(prev => {
           const newMap = new Map(prev)
-          newMap.delete(targetUserId)
+          newMap.delete(transferId)
           return newMap
         })
       }
       
       reader.readAsArrayBuffer(slice)
     }
-
-    // Start sending
     sendNextChunk()
   }
 
@@ -358,11 +527,10 @@ export const useWebRTC = (socket,roomId)=>{
   return {
     connections,
     dataChannels,
-    transferProgress,
-    isReceiving,
-    receivingFile,
+    activeTransfers,
     receivedFiles,
     sendFile,
+    cancelTransfer,
     connectToPeer,
     handleOffer,
     handleAnswer,

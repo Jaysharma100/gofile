@@ -34,11 +34,10 @@ const FileTransfer =() =>{
 
     const {
         dataChannels,
-        transferProgress,
-        isReceiving,
-        receivingFile,
+        activeTransfers,
         receivedFiles,
         sendFile,
+        cancelTransfer,
         connectToPeer,
         handleOffer,
         handleAnswer,
@@ -58,7 +57,6 @@ const FileTransfer =() =>{
         }
     }, [userName])
 
-    // Find user name by ID
     const getUserName = (userId) => {
         const user = connectedUsers.find(u => u.id === userId)
         return user ? user.name : `User ${userId.slice(-4)}`
@@ -100,10 +98,9 @@ const FileTransfer =() =>{
         try {
             await navigator.clipboard.writeText(shareLink)
             setLinkCopied(true)
-            setTimeout(() => setLinkCopied(false), 2000) // Reset after 2 seconds
+            setTimeout(() => setLinkCopied(false), 2000)
         } catch (err) {
             console.error('Failed to copy link:', err)
-            // Fallback for older browsers
             const textArea = document.createElement('textarea')
             textArea.value = shareLink
             document.body.appendChild(textArea)
@@ -124,7 +121,6 @@ const FileTransfer =() =>{
         setSelectedFile(file)
     }
 
-    // Handle drag events
     const handleDragOver = (e) => {
         e.preventDefault()
         setDragOver(true)
@@ -224,6 +220,9 @@ const FileTransfer =() =>{
         if (type.includes('pdf')) return 'pdf'
         return 'default'
     }
+    //transfers arrays
+    const sendingTransfers = Array.from(activeTransfers.values()).filter(t => t.type === 'sending')
+    const receivingTransfers = Array.from(activeTransfers.values()).filter(t => t.type === 'receiving')
 
     const shareTitle = `Join my file transfer room (${roomId})`
     const shareDescription = `Click this link to join my secure file transfer room and share files instantly! Room ID: ${roomId}`
@@ -385,92 +384,157 @@ const FileTransfer =() =>{
                         </div>
                     )}
                 </div>
-                {receivedFiles.length > 0 && (
+
+                {sendingTransfers.length > 0 && (
                     <div className="card">
-                    <div className="received-files-header">
-                        <h3>Received Files ({receivedFiles.length})</h3>
-                        <button
-                        onClick={clearAllReceivedFiles}
-                        className="btn btn-sm btn-secondary"
-                        >
-                        Clear All
-                        </button>
-                    </div>
-                    <div className="received-files-list">
-                        {receivedFiles.map((file) => (
-                        <div key={file.id} className="received-file-item">
-                            <div className="file-info">
-                            <div className={`file-icon ${getFileIconClass(file.type)}`}>
-                                {getFileIcon(file.type)}
-                            </div>
-                            <div className="file-details">
-                                <div className="file-name">{file.name}</div>
-                                <div className="file-meta">
-                                    {formatFileSize(file.size)} • From {getUserName(file.sender)} • {formatDate(file.receivedAt)}
+                        <h3>Sending Files ({sendingTransfers.length})</h3>
+                        <div className="transfer-list">
+                            {sendingTransfers.map((transfer) => (
+                                <div key={transfer.id} className="transfer-item sending">
+                                    <div className="transfer-info">
+                                        <div className="transfer-header">
+                                            <div className="transfer-details">
+                                                <span className="transfer-name">
+                                                    📤 {transfer.fileName}
+                                                </span>
+                                                <span className="transfer-target">
+                                                    to {getUserName(transfer.userId)}
+                                                </span>
+                                            </div>
+                                            <div className="transfer-actions">
+                                                <span className="transfer-progress">
+                                                    {Math.round(transfer.progress)}%
+                                                </span>
+                                                <button
+                                                    onClick={() => cancelTransfer(transfer.id)}
+                                                    className="btn btn-cancel"
+                                                    disabled={transfer.status === 'cancelled'}
+                                                    title="Cancel transfer"
+                                                >
+                                                    {transfer.status === 'cancelled' ? '❌' : '❌'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="transfer-meta">
+                                            <span>{formatFileSize(transfer.fileSize)}</span>
+                                            <span className={`transfer-status ${transfer.status}`}>
+                                                {transfer.status === 'cancelled' ? 'Cancelled' : 
+                                                    transfer.progress === 100 ? 'Completed' : 'Sending...'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="progress-bar">
+                                        <div
+                                            className={`progress-fill sending ${transfer.status === 'cancelled' ? 'cancelled' : ''}`}
+                                            style={{ width: `${transfer.progress}%` }}
+                                        ></div>
+                                    </div>
                                 </div>
-                                {file.downloaded && (
-                                <div className="file-downloaded">✓ Downloaded</div>
-                                )}
-                            </div>
-                            </div>
-                            <div className="file-actions">
-                            <button
-                                onClick={() => downloadReceivedFile(file.id)}
-                                className={`btn btn-download ${file.downloaded ? 'downloaded' : ''}`}
-                            >
-                                {file.downloaded ? '📥 Download Again' : '📥 Download'}
-                            </button>
-                            <button
-                                onClick={() => deleteReceivedFile(file.id)}
-                                className="delete-btn"
-                                title="Delete file"
-                            >
-                                🗑️
-                            </button>
-                            </div>
+                            ))}
                         </div>
-                        ))}
-                    </div>
                     </div>
                 )}
 
-                {/* Transfer Progress */}
-                {(Array.from(transferProgress.entries()).length > 0 || isReceiving) && (
+                {/* Receiving Transfers */}
+                {receivingTransfers.length > 0 && (
                     <div className="card">
-                    <h3>File Transfers</h3>
-                    <div className="transfer-list">
-                        {isReceiving && receivingFile && (
-                        <div className="transfer-item receiving">
-                            <div className="transfer-header">
-                            <span className="transfer-name">Receiving: {receivingFile.name}</span>
-                            <span className="transfer-progress">{formatFileSize(receivingFile.size)}</span>
-                            </div>
-                            <div className="progress-bar">
-                            <div
-                                className="progress-fill receiving"
-                                style={{ width: `${Array.from(transferProgress.values())[0] || 0}%` }}
-                            ></div>
-                            </div>
+                        <h3>Receiving Files ({receivingTransfers.length})</h3>
+                        <div className="transfer-list">
+                            {receivingTransfers.map((transfer) => (
+                                <div key={transfer.id} className="transfer-item receiving">
+                                    <div className="transfer-info">
+                                        <div className="transfer-header">
+                                            <div className="transfer-details">
+                                                <span className="transfer-name">
+                                                    📥 {transfer.fileName}
+                                                </span>
+                                                <span className="transfer-source">
+                                                    from {getUserName(transfer.userId)}
+                                                </span>
+                                            </div>
+                                            <div className="transfer-actions">
+                                                <span className="transfer-progress">
+                                                    {Math.round(transfer.progress)}%
+                                                </span>
+                                                <button
+                                                    onClick={() => cancelTransfer(transfer.id)}
+                                                    className="btn btn-cancel"
+                                                    disabled={transfer.status === 'cancelled'}
+                                                    title="Cancel transfer"
+                                                >
+                                                    {transfer.status === 'cancelled' ? '❌' : '❌'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="transfer-meta">
+                                            <span>{formatFileSize(transfer.fileSize)}</span>
+                                            <span className={`transfer-status ${transfer.status}`}>
+                                                {transfer.status === 'cancelled' ? 'Cancelled' : 
+                                                    transfer.progress === 100 ? 'Completed' : 'Receiving...'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="progress-bar">
+                                        <div
+                                            className={`progress-fill receiving ${transfer.status === 'cancelled' ? 'cancelled' : ''}`}
+                                            style={{ width: `${transfer.progress}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        )}
-                        {Array.from(transferProgress.entries()).map(([userId, progress]) => (
-                        <div key={userId} className="transfer-item sending">
-                            <div className="transfer-header">
-                            <span className="transfer-name">Sending to {getUserName(userId)}</span>
-                            <span className="transfer-progress">{Math.round(progress)}%</span>
-                            </div>
-                            <div className="progress-bar">
-                            <div
-                                className="progress-fill sending"
-                                style={{ width: `${progress}%` }}
-                            ></div>
-                            </div>
-                        </div>
-                        ))}
-                    </div>
                     </div>
                 )}
-            </div>
+
+                {receivedFiles.length > 0 && (
+                        <div className="card">
+                            <div className="received-files-header">
+                                <h3>Received Files ({receivedFiles.length})</h3>
+                                <button
+                                    onClick={clearAllReceivedFiles}
+                                    className="btn btn-sm btn-secondary"
+                                >
+                                    Clear All
+                                </button>
+                            </div>
+                            <div className="received-files-list">
+                                {receivedFiles.map((file) => (
+                                    <div key={file.id} className="received-file-item">
+                                        <div className="file-info">
+                                            <div className={`file-icon ${getFileIconClass(file.type)}`}>
+                                                {getFileIcon(file.type)}
+                                            </div>
+                                            <div className="file-details">
+                                                <div className="file-name">{file.name}</div>
+                                                <div className="file-meta">
+                                                    {formatFileSize(file.size)} • From {getUserName(file.sender)} • {formatDate(file.receivedAt)}
+                                                </div>
+                                                {file.downloaded && (
+                                                    <div className="file-downloaded">✓ Downloaded</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="file-actions">
+                                            <button
+                                                onClick={() => downloadReceivedFile(file.id)}
+                                                className={`btn btn-download ${file.downloaded ? 'downloaded' : ''}`}
+                                            >
+                                                {file.downloaded ? 'Download Again' : 'Download'}
+                                            </button>
+                                            <button
+                                                onClick={() => deleteReceivedFile(file.id)}
+                                                className="delete-btn"
+                                                title="Delete file"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             )}
 
             {showShareModal && (
