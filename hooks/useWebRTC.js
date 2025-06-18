@@ -590,8 +590,9 @@ export const useWebRTC = (socket, roomId) => {
       if (connections.has(userId)) {
         const existingConnection = connections.get(userId)
         if (existingConnection.connectionState === 'connected' || 
-            existingConnection.connectionState === 'connecting') {
-          console.log('Connection already exists or connecting for:', userId)
+            existingConnection.connectionState === 'connecting' ||
+            existingConnection.signalingState !== 'stable') {
+          console.log('Connection already exists or not ready for:', userId)
           return
         }
       }
@@ -629,6 +630,14 @@ export const useWebRTC = (socket, roomId) => {
         peerConnection = createPeerConnection(senderId)
         setConnections(prev => new Map(prev.set(senderId, peerConnection)))
       }
+      else{
+        if (peerConnection.signalingState !== 'stable') {
+          console.log('Connection not in stable state, recreating:', peerConnection.signalingState)
+          peerConnection.close()
+          peerConnection = createPeerConnection(senderId)
+          setConnections(prev => new Map(prev.set(senderId, peerConnection)))
+        }
+      }
       
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
       
@@ -654,6 +663,11 @@ export const useWebRTC = (socket, roomId) => {
       console.log('Handling answer from:', senderId)
       const peerConnection = connections.get(senderId)
       if (peerConnection) {
+
+        if (peerConnection.signalingState !== 'have-local-offer') {
+          console.log('Ignoring answer - connection not in correct state:', peerConnection.signalingState)
+          return
+        }
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer))
         
         // Process any queued ICE candidates
