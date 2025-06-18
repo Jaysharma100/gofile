@@ -1,40 +1,93 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { io } from 'socket.io-client'
-
-let socket
 
 export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(false)
+  const socketRef = useRef(null)
+  const reconnectTimeoutRef = useRef(null)
 
   useEffect(() => {
-    const socketInitializer = () => {
-      socket = io('https://gofile-x1mf.onrender.com', {
+    const connectSocket = () => {
+      if (socketRef.current?.connected) {
+        return // Already connected
+      }
+
+      console.log('Initializing socket connection...')
+      socketRef.current = io('https://gofile-x1mf.onrender.com', {
         path: '/socket.io',
-        transports: ['websocket'], // optional, but helps force WebSocket
+        transports: ['websocket', 'polling'], // Allow fallback to polling
+        timeout: 20000,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        maxReconnectionAttempts: 5
       })
 
-      socket.on('connect', () => {
-        console.log('✅ Connected to server')
+      socketRef.current.on('connect', () => {
+        console.log('✅ Connected to server with ID:', socketRef.current.id)
+        setIsConnected(true)
+        
+        // Clear any reconnection timeout
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current)
+          reconnectTimeoutRef.current = null
+        }
+      })
+
+      socketRef.current.on('disconnect', (reason) => {
+        console.log('❌ Disconnected from server. Reason:', reason)
+        setIsConnected(false)
+        
+        // Attempt to reconnect after a delay if not a manual disconnect
+        if (reason !== 'io client disconnect') {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('Attempting to reconnect...')
+            if (socketRef.current && !socketRef.current.connected) {
+              socketRef.current.connect()
+            }
+          }, 2000)
+        }
+      })
+
+      socketRef.current.on('connect_error', (error) => {
+        console.error('❌ Connection error:', error.message)
+        setIsConnected(false)
+      })
+
+      socketRef.current.on('reconnect', (attemptNumber) => {
+        console.log(`✅ Reconnected after ${attemptNumber} attempts`)
         setIsConnected(true)
       })
 
-      socket.on('disconnect', () => {
-        console.log('❌ Disconnected from server')
+      socketRef.current.on('reconnect_error', (error) => {
+        console.error('❌ Reconnection error:', error.message)
+      })
+
+      socketRef.current.on('reconnect_failed', () => {
+        console.error('❌ Failed to reconnect after maximum attempts')
         setIsConnected(false)
       })
     }
 
-    if (!socket) {
-      socketInitializer()
-    }
+    connectSocket()
 
+    // Cleanup function
     return () => {
-      if (socket) {
-        socket.disconnect()
-        socket = null
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
       }
+      
+      if (socketRef.current) {
+        console.log('Cleaning up socket connection')
+        socketRef.current.disconnect()
+        socketRef.current = null
+      }
+      setIsConnected(false)
     }
   }, [])
 
-  return { socket, isConnected }
+  return { 
+    socket: socketRef.current, 
+    isConnected 
+  }
 }
