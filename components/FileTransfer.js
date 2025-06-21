@@ -205,6 +205,14 @@ const FileTransfer =() =>{
         }).format(date)
     }
 
+    const formatSpeed = (bytesPerSecond) => {
+        if (!bytesPerSecond || bytesPerSecond === 0) return '0 B/s'
+        const k = 1024
+        const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s']
+        const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k))
+        return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+    }
+
     const getFileIcon = (type) => {
         if (type.startsWith('image/')) return '🖼️'
         if (type.startsWith('video/')) return '🎥'
@@ -402,6 +410,9 @@ const FileTransfer =() =>{
                                                 </span>
                                             </div>
                                             <div className="transfer-actions">
+                                                <span className="transfer-speed">
+                                                    {formatSpeed(transfer.speed || 0)}
+                                                </span>
                                                 <span className="transfer-progress">
                                                     {Math.round(transfer.progress)}%
                                                 </span>
@@ -453,6 +464,9 @@ const FileTransfer =() =>{
                                                 </span>
                                             </div>
                                             <div className="transfer-actions">
+                                                <span className="transfer-speed">
+                                                    {formatSpeed(transfer.speed || 0)}
+                                                </span>
                                                 <span className="transfer-progress">
                                                     {Math.round(transfer.progress)}%
                                                 </span>

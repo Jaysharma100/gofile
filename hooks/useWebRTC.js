@@ -59,6 +59,7 @@ export const useWebRTC = (socket, roomId) => {
   const [activeTransfers, setActiveTransfers] = useState(new Map())
   const [receivedFiles, setReceivedFiles] = useState([])
   const [connectionStates, setConnectionStates] = useState(new Map())
+  const [transferSpeeds, setTransferSpeeds] = useState(new Map())
   
   const receivedBuffers = useRef(new Map())
   const receivedSize = useRef(new Map())
@@ -68,6 +69,7 @@ export const useWebRTC = (socket, roomId) => {
   const currentSendingTransfer = useRef(new Map())
   const iceCandidateQueues = useRef(new Map()) // Queue for early ICE candidates
   const reconnectionAttempts = useRef(new Map())
+  const speedTracking = useRef(new Map()) // { transferId: { lastTime, lastBytes, speeds: [] } }
 
   const createPeerConnection = useCallback((userId) => {
     console.log('Creating peer connection for user:', userId)
@@ -181,6 +183,43 @@ export const useWebRTC = (socket, roomId) => {
       console.log(`Initiating reconnection to ${userId}`)
       connectToPeer(userId)
     }, 2000 + (attempts * 1000)) // Exponential backoff
+  }
+
+  const calculateSpeed = (transferId, currentBytes) => {
+    const now = Date.now()
+    const tracking = speedTracking.current.get(transferId)
+    
+    if (!tracking) {
+      speedTracking.current.set(transferId, {
+        lastTime: now,
+        lastBytes: currentBytes,
+        speeds: []
+      })
+      return 0
+    }
+    
+    const timeDiff = (now - tracking.lastTime) / 1000 // seconds
+    const bytesDiff = currentBytes - tracking.lastBytes
+    
+    if (timeDiff >= 0.5) { // Update every 500ms
+      const speed = bytesDiff / timeDiff // bytes per second
+      tracking.speeds.push(speed)
+      
+      // Keep only last 5 readings for smoother average
+      if (tracking.speeds.length > 5) {
+        tracking.speeds.shift()
+      }
+      
+      const avgSpeed = tracking.speeds.reduce((a, b) => a + b, 0) / tracking.speeds.length
+      
+      tracking.lastTime = now
+      tracking.lastBytes = currentBytes
+      
+      setTransferSpeeds(prev => new Map(prev.set(transferId, avgSpeed)))
+      return avgSpeed
+    }
+    
+    return transferSpeeds.get(transferId) || 0
   }
 
   const generateTransferId = () => {
@@ -339,12 +378,13 @@ export const useWebRTC = (socket, roomId) => {
           receivedSize.current.set(transferId, newSize)
           
           const progress = (newSize / metadata.size) * 100
+          const speed = calculateSpeed(transferId, newSize)
           
           setActiveTransfers(prev => {
             const newMap = new Map(prev)
             const transfer = newMap.get(transferId)
             if (transfer) {
-              newMap.set(transferId, { ...transfer, progress })
+              newMap.set(transferId, { ...transfer, progress, speed })
             }
             return newMap
           })
@@ -362,6 +402,13 @@ export const useWebRTC = (socket, roomId) => {
       controller.cancelled = true
       activeTransferControllers.current.delete(transferId)
     }
+
+    speedTracking.current.delete(transferId)
+    setTransferSpeeds(prev => {
+      const newMap = new Map(prev)
+      newMap.delete(transferId)
+      return newMap
+    })
     
     const channel = dataChannels.get(transfer.userId)
     if (channel && channel.readyState === 'open') {
@@ -521,13 +568,14 @@ export const useWebRTC = (socket, roomId) => {
             offset += e.target.result.byteLength
             
             const progress = Math.min((offset / file.size) * 100, 100)
+            const speed = calculateSpeed(transferId, offset)
             
             // Update progress
             setActiveTransfers(prev => {
               const newMap = new Map(prev)
               const transfer = newMap.get(transferId)
               if (transfer) {
-                newMap.set(transferId, { ...transfer, progress })
+                newMap.set(transferId, { ...transfer, progress, speed})
               }
               return newMap
             })
@@ -722,8 +770,9 @@ export const useWebRTC = (socket, roomId) => {
     setDataChannels(new Map())
     setActiveTransfers(new Map())
     setConnectionStates(new Map())
-    
+    setTransferSpeeds(new Map())
     // Clear all refs
+    speedTracking.current.clear()
     receivedBuffers.current.clear()
     receivedSize.current.clear()
     fileMetadata.current.clear()
